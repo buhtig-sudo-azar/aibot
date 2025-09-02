@@ -28,3 +28,5 @@ https://deepmind.google/discover/blog/transforming-the-future-of-music-creation/
 https://deepmind.google/discover/blog/millions-of-new-materials-discovered-with-deep-learning/
 https://deepmind.google/discover/blog/introducing-gemini-our-largest-and-most-capable-ai-model/
 https://deepmind.google/discover/blog/google-deepmind-at-neurips-2023/
+https://deepmind.google/discover/blog/image-editing-in-gemini-just-got-a-major-upgrade/
+https://towardsdatascience.com/?p=607005

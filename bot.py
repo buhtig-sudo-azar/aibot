@@ -6,7 +6,6 @@ import telebot
 from dotenv import load_dotenv
 from telebot.apihelper import ApiTelegramException
 
-# Путь к файлу для сохранения ID отправленных новостей
 SENT_NEWS_FILE = 'sent_news.txt'
 
 def load_sent_news():
@@ -19,12 +18,10 @@ def save_sent_news(news_id):
     with open(SENT_NEWS_FILE, 'a', encoding='utf-8') as f:
         f.write(news_id + '\n')
 
-# Загрузка переменных окружения из .env
 load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# RSS-ленты новостей по ИИ
 RSS_FEEDS = [
     'https://www.technologyreview.com/topic/artificial-intelligence/feed',
     'https://deepmind.com/blog/feed/basic',
@@ -33,37 +30,46 @@ RSS_FEEDS = [
     'https://towardsdatascience.com/feed',
 ]
 
-# Множество для отслеживания уже отправленных новостей
 sent_news = load_sent_news()
 
-# ID канала или чата для отправки новостей
 CHAT_ID = '@intsring'
 
-def fetch_and_send_news(feed_url):
-    global sent_news
-    try:
-        feed = feedparser.parse(feed_url)
-        # Отправляем посты в порядке от старых к новым
-        for entry in reversed(feed.entries):
-            news_id = entry.get('id') or entry.get('link')
-            if news_id not in sent_news:
-                title = entry.get('title', 'Новость без заголовка')
-                link = entry.get('link', '')
-                message = f"📰 {title}\nПодробнее: {link}"
-                try:
-                    bot.send_message(CHAT_ID, message)
-                    sent_news.add(news_id)
-                    save_sent_news(news_id)  # сохраняем ID нового поста
-                except Exception as e:
-                    print(f"Ошибка при отправке новости: {e}")
-    except Exception as e:
-        print(f"Ошибка при получении новостей: {e}")
+# Храним для каждого источника индекс следующей новости для отправки
+feed_next_indices = [0] * len(RSS_FEEDS)
+
+def fetch_and_send_next_news():
+    global sent_news, feed_next_indices
+    for i, feed_url in enumerate(RSS_FEEDS):
+        try:
+            feed = feedparser.parse(feed_url)
+            entries = feed.entries
+            if feed_next_indices[i] < len(entries):
+                entry = entries[feed_next_indices[i]]
+                feed_next_indices[i] += 1
+                news_id = entry.get('id') or entry.get('link')
+                if news_id not in sent_news:
+                    title = entry.get('title', 'Новость без заголовка')
+                    link = entry.get('link', '')
+                    message = f"📰 {title}\nПодробнее: {link}"
+                    try:
+                        bot.send_message(CHAT_ID, message)
+                        sent_news.add(news_id)
+                        save_sent_news(news_id)
+                        print(f"Отправлена новость из ленты {i}: {title}")
+                    except Exception as e:
+                        print(f"Ошибка при отправке новости: {e}")
+                else:
+                    print(f"Новость уже отправлялась: {news_id}")
+            else:
+                print(f"Лента {i} закончилась, следующий индекс сброшен.")
+                feed_next_indices[i] = 0  # сбросить индекс, чтобы начать заново
+        except Exception as e:
+            print(f"Ошибка при обработке ленты {feed_url}: {e}")
 
 def news_loop():
     while True:
-        for feed_url in RSS_FEEDS:
-            fetch_and_send_news(feed_url)
-            time.sleep(600)  # Пауза 10 минут между проверками
+        fetch_and_send_next_news()
+        time.sleep(600)  # Пауза 10 минут между рассылками
 
 @bot.message_handler(commands=['start', 'hello'])
 def send_welcome(message):
@@ -74,10 +80,9 @@ def echo_all(message):
     bot.reply_to(message, message.text)
 
 def run_bot():
-    bot.delete_webhook()  # Удаляем webhook для избежания конфликтов
+    bot.delete_webhook()
     while True:
         try:
-            print("Запуск infinity_polling...")
             bot.infinity_polling(timeout=60, long_polling_timeout=60)
         except ApiTelegramException as e:
             print(f"Ошибка Telegram API: {e}")
